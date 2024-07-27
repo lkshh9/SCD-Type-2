@@ -1,0 +1,60 @@
+-- SQL cell
+CREATE TABLE IF NOT EXISTS CustomerDim (
+    CustomerID INT,
+    CustomerName STRING,
+    Address STRING,
+    EffectiveStartDate DATE,
+    EffectiveEndDate DATE,
+    IsCurrent INT
+);
+
+
+-- SQL cell
+INSERT INTO CustomerDim (CustomerID, CustomerName, Address, EffectiveStartDate, EffectiveEndDate, IsCurrent)
+VALUES
+    (1, 'John Doe', '123 Main St', '2023-01-01', '9999-12-31', 1),
+    (2, 'Alice Johnson', '456 Elm St', '2023-01-01', '9999-12-31', 1),
+    (3, 'Bob Smith', '789 Oak St', '2023-01-01', '9999-12-31', 1);
+
+
+
+# Python cell
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import current_date
+
+# Initialize Spark session
+spark = SparkSession.builder.appName("SCDType2").getOrCreate()
+
+# Define the function to apply SCD Type-2 logic
+def update_scd_type2(customer_id, customer_name, address):
+    current_date_value = current_date()
+    
+    # Check if the record already exists
+    existing_record = spark.sql(f"""
+        SELECT * 
+        FROM CustomerDim 
+        WHERE CustomerID = {customer_id} 
+        AND IsCurrent = 1
+    """)
+    
+    if existing_record.count() > 0:
+        # Update the existing record
+        spark.sql(f"""
+            UPDATE CustomerDim
+            SET EffectiveEndDate = DATE_SUB('{current_date_value}', 1),
+                IsCurrent = 0
+            WHERE CustomerID = {customer_id} 
+            AND IsCurrent = 1
+        """)
+    
+    # Insert the new record
+    spark.sql(f"""
+        INSERT INTO CustomerDim (CustomerID, CustomerName, Address, EffectiveStartDate, EffectiveEndDate, IsCurrent)
+        VALUES ({customer_id}, '{customer_name}', '{address}', '{current_date_value}', '9999-12-31', 1)
+    """)
+
+# Example usage
+update_scd_type2(1, 'John Doe', 'Ajmer')
+update_scd_type2(4, 'David Richard', 'Mumbai')
+update_scd_type2(3, 'Bob Smith', 'Chennai')
+update_scd_type2(5, 'Eva Dsouza', 'Mumbai')
